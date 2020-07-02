@@ -2,6 +2,7 @@ package com.example.lineargraph;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 
 /**
@@ -19,6 +20,6 @@ public class GraphDrawerActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
 
         mView = new Linear3DSurfaceView(this);
-        setContentView(mView);
+        setContentView((GLSurfaceView)mView);
     }
 }

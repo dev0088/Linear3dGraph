@@ -1,8 +1,12 @@
 package com.example.lineargraph;
 
+import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Stream;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -10,8 +14,12 @@ import javax.microedition.khronos.opengles.GL10;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.Matrix;
+import android.os.Build;
 import android.os.SystemClock;
 import android.view.MotionEvent;
+
+import androidx.annotation.RequiresApi;
+import androidx.core.content.res.TypedArrayUtils;
 
 public class Linear3DRenderer implements GLSurfaceView.Renderer {
     /**
@@ -64,25 +72,35 @@ public class Linear3DRenderer implements GLSurfaceView.Renderer {
     /** Size of the color data in elements. */
     private final int mColorDataSize = 4;
 
+    private final int mAxisDataCount = 2;
+
     public float mAngleX = 20.0f;
-    public float mAngleY = 20.0f;
-    public float mAngleZ = 20.0f;
+    public float mAngleY = -20.0f;
+    public float mAngleZ = 0.0f;
     private float mPreviousX;
     private float mPreviousY;
     private final float TOUCH_SCALE_FACTOR = 0.6f;
 
+    private FloatBuffer mPoints;
+    private final int mPointsPositionOffset = 0;
+    private final int mPointsStrideBytes = (mPositionDataSize + mColorDataSize) * mBytesPerFloat;
+    private int mPointsPositionHandle;
+    private final int mPointsColorOffset = 3;
+    private int mPointsColorHandle;
+    private float[] mPointsDataList;
     /**
      * Initialize the model data.
      */
+    @RequiresApi(api = Build.VERSION_CODES.N)
     public Linear3DRenderer()
     {
         // This triangle is white, gray, and black.
         final float[] xAxisData = {
                 // X, Y, Z,
-                -1.0f, -0.0f, 0.0f,
+                -100.0f, -0.0f, 0.0f,
                 1.0f, 0.0f, 0.0f, 1.0f,
 
-                1.0f, 0.0f, 0.0f,
+                100.0f, 0.0f, 0.0f,
                 1.0f, 0.0f, 0.0f, 1.0f,
         };
 
@@ -116,13 +134,26 @@ public class Linear3DRenderer implements GLSurfaceView.Renderer {
         mAxisZ = ByteBuffer.allocateDirect(zAxisData.length * mBytesPerFloat)
                 .order(ByteOrder.nativeOrder()).asFloatBuffer();
         mAxisZ.put(zAxisData).position(0);
+
+        float[] mPointsDataList = new float[7];
+        float[] tmp = {
+                // X, Y, Z,
+                0.0f, 0.0f, 0.0f,
+                1.0f, 1.0f, 1.0f, 1.0f
+        };
+//        mPointsDataList = concatenate(mPointsDataList, tmp);
+        System.arraycopy(tmp, 0, mPointsDataList, 0, 7);
+        System.out.println("==== mPointsDataList: " + Arrays.toString(mPointsDataList));
+        mPoints = ByteBuffer.allocateDirect(mPointsDataList.length * mBytesPerFloat)
+                .order(ByteOrder.nativeOrder()).asFloatBuffer();
+        mPoints.put(mPointsDataList).position(0);
     }
 
     @Override
     public void onSurfaceCreated(GL10 glUnused, EGLConfig config)
     {
         // Set the background clear color to gray.
-        GLES20.glClearColor(0.5f, 0.5f, 0.5f, 0.5f);
+        GLES20.glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
         // Position the eye behind the origin.
         final float eyeX = 0.0f;
@@ -265,6 +296,8 @@ public class Linear3DRenderer implements GLSurfaceView.Renderer {
         mMVPMatrixHandle = GLES20.glGetUniformLocation(programHandle, "u_MVPMatrix");
         mPositionHandle = GLES20.glGetAttribLocation(programHandle, "a_Position");
         mColorHandle = GLES20.glGetAttribLocation(programHandle, "a_Color");
+        mPointsPositionHandle = GLES20.glGetAttribLocation(programHandle, "p_Points");
+        mPointsColorHandle = GLES20.glGetAttribLocation(programHandle, "a_PointsColor");
 
         // Tell OpenGL to use this program when rendering.
         GLES20.glUseProgram(programHandle);
@@ -303,11 +336,13 @@ public class Linear3DRenderer implements GLSurfaceView.Renderer {
         drawLine(mAxisY);
         drawLine(mAxisZ);
 
+        drawPoints(mPoints);
+
     }
 
     public void drawLine(final FloatBuffer aTriangleBuffer) {
         aTriangleBuffer.position(mPositionOffset);
-        GLES20.glVertexAttribPointer(mPositionHandle, 3, GLES20.GL_FLOAT, false,
+        GLES20.glVertexAttribPointer(mPositionHandle, mPositionDataSize, GLES20.GL_FLOAT, false,
                 mStrideBytes, aTriangleBuffer);
 
         GLES20.glEnableVertexAttribArray(mPositionHandle);
@@ -323,7 +358,34 @@ public class Linear3DRenderer implements GLSurfaceView.Renderer {
         Matrix.multiplyMM(mMVPMatrix, 0, mProjectionMatrix, 0, mMVPMatrix, 0);
 
         GLES20.glUniformMatrix4fv(mMVPMatrixHandle, 1, false, mMVPMatrix, 0);
-        GLES20.glDrawArrays(GLES20.GL_LINES, 0, 2);
+        GLES20.glDrawArrays(GLES20.GL_LINES, 0, mAxisDataCount);
+
+        GLES20.glDisableVertexAttribArray(mPositionHandle);
+    }
+
+    public void drawPoints(final FloatBuffer aTriangleBuffer) {
+        aTriangleBuffer.position(mPositionOffset);
+        GLES20.glVertexAttribPointer(mPositionHandle, mPositionDataSize, GLES20.GL_FLOAT, false,
+                mStrideBytes, aTriangleBuffer);
+
+        GLES20.glEnableVertexAttribArray(mPositionHandle);
+
+        aTriangleBuffer.position(mColorOffset);
+
+        GLES20.glVertexAttribPointer(mColorHandle, mColorDataSize, GLES20.GL_FLOAT, false,
+                mStrideBytes, aTriangleBuffer);
+
+        GLES20.glEnableVertexAttribArray(mPointsColorHandle);
+
+        Matrix.multiplyMM(mMVPMatrix, 0, mViewMatrix, 0, mModelMatrix, 0);
+        Matrix.multiplyMM(mMVPMatrix, 0, mProjectionMatrix, 0, mMVPMatrix, 0);
+
+        GLES20.glUniformMatrix4fv(mMVPMatrixHandle, 1, false, mMVPMatrix, 0);
+        int counts = aTriangleBuffer.capacity() / (mPositionDataSize + mColorDataSize);
+        System.out.println("===== capacity: " + aTriangleBuffer.capacity() + ", " + counts);
+
+        GLES20.glLineWidth(4);
+        GLES20.glDrawArrays(GLES20.GL_POINTS, 0, counts);
 
         GLES20.glDisableVertexAttribArray(mPositionHandle);
     }
@@ -342,6 +404,38 @@ public class Linear3DRenderer implements GLSurfaceView.Renderer {
         }
         mPreviousX = x;
         mPreviousY = y;
+
+        // Update point data real-time
+         float[] newData = {
+                // X, Y, Z,
+                mAngleX/100, mAngleY/100, mAngleZ/100,
+                1.0f, 1.0f, 1.0f, 1.0f
+        };
+
+        mPointsDataList = concatenate(mPointsDataList, newData);
+
+        if (mPointsDataList.length > 7 ) {
+            System.out.println("==== mPointsDataList: " + mPointsDataList.length + ", " + Arrays.toString(mPointsDataList));
+            mPoints = ByteBuffer.allocateDirect(mPointsDataList.length * mBytesPerFloat)
+                    .order(ByteOrder.nativeOrder()).asFloatBuffer();
+            mPoints.put(mPointsDataList).position(0);
+        }
+
         return true;
+    }
+
+    public float[] concatenate(float[] a, float[] b) {
+        if (a == null || b == null)
+            return new float[0];
+
+        int aLen = a.length;
+        int bLen = b.length;
+
+        @SuppressWarnings("unchecked")
+        float[] c = new float[aLen + bLen];
+        System.arraycopy(a, 0, c, 0, aLen);
+        System.arraycopy(b, 0, c, aLen, bLen);
+
+        return c;
     }
 }
