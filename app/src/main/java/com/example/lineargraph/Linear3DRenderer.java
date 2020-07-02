@@ -88,6 +88,7 @@ public class Linear3DRenderer implements GLSurfaceView.Renderer {
     private final int mPointsColorOffset = 3;
     private int mPointsColorHandle;
     private float[] mPointsDataList;
+    private final int mPointsMaxLength = 10003;
     /**
      * Initialize the model data.
      */
@@ -141,9 +142,8 @@ public class Linear3DRenderer implements GLSurfaceView.Renderer {
                 0.0f, 0.0f, 0.0f,
                 1.0f, 1.0f, 1.0f, 1.0f
         };
-//        mPointsDataList = concatenate(mPointsDataList, tmp);
         System.arraycopy(tmp, 0, mPointsDataList, 0, 7);
-        System.out.println("==== mPointsDataList: " + Arrays.toString(mPointsDataList));
+//        System.out.println("==== mPointsDataList: " + Arrays.toString(mPointsDataList));
         mPoints = ByteBuffer.allocateDirect(mPointsDataList.length * mBytesPerFloat)
                 .order(ByteOrder.nativeOrder()).asFloatBuffer();
         mPoints.put(mPointsDataList).position(0);
@@ -415,7 +415,7 @@ public class Linear3DRenderer implements GLSurfaceView.Renderer {
         mPointsDataList = concatenate(mPointsDataList, newData);
 
         if (mPointsDataList.length > 7 ) {
-            System.out.println("==== mPointsDataList: " + mPointsDataList.length + ", " + Arrays.toString(mPointsDataList));
+//            System.out.println("==== mPointsDataList: " + mPointsDataList.length + ", " + Arrays.toString(mPointsDataList));
             mPoints = ByteBuffer.allocateDirect(mPointsDataList.length * mBytesPerFloat)
                     .order(ByteOrder.nativeOrder()).asFloatBuffer();
             mPoints.put(mPointsDataList).position(0);
@@ -431,10 +431,23 @@ public class Linear3DRenderer implements GLSurfaceView.Renderer {
         int aLen = a.length;
         int bLen = b.length;
 
-        @SuppressWarnings("unchecked")
-        float[] c = new float[aLen + bLen];
-        System.arraycopy(a, 0, c, 0, aLen);
-        System.arraycopy(b, 0, c, aLen, bLen);
+        // Limit max legnth
+        int dataLength = aLen + bLen;
+        if (dataLength > mPointsMaxLength) dataLength = mPointsMaxLength;
+
+        float[] c = new float[dataLength];
+        // Get source points
+        int aSourcePoint = 0;
+        int aDestLength = aLen;
+        int bDestPoint = aLen;
+        if (dataLength >= mPointsMaxLength) {
+            aSourcePoint = (aLen + bLen) - mPointsMaxLength;
+            aDestLength = aLen - aSourcePoint;
+        }
+
+        System.out.println("==== concatenate: " + aSourcePoint + ", " + aLen + ", " + bLen);
+        System.arraycopy(a, aSourcePoint, c, 0, aDestLength);
+        System.arraycopy(b, 0, c, aDestLength, bLen);
 
         return c;
     }
